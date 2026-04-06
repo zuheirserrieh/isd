@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>City Explorer</title>
+  <link rel="stylesheet" href="home.css" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <div class="background-orb orb-a"></div>
+    <div class="background-orb orb-b"></div>
+    <div class="background-orb orb-c"></div>
+
+    <main class="layout">
+      <section class="hero-panel">
+        <p class="eyebrow">Interactive City Guide</p>
+        <h1>Discover a city through history, events, maps, and live questions.</h1>
+        <p class="hero-copy">
+          Search any city to load a short historical summary, featured imagery, nearby events,
+          and a city assistant powered by your existing backend.
+        </p>
+
+        <div class="search-panel">
+          <label class="search-label" for="cityInput">Search a city</label>
+          <div class="search-row">
+            <input
+              id="cityInput"
+              v-model.trim="cityInput"
+              class="city-input"
+              type="text"
+              placeholder="Beirut, Rome, Tokyo..."
+              @keyup.enter="searchCity"
+            />
+            <button class="primary-btn" @click="searchCity" :disabled="loading">
+              {{ loading ? 'Searching...' : 'Explore City' }}
+            </button>
+          </div>
+
+          <div class="action-row">
+            <button class="ghost-btn" @click="useCurrentLocation" :disabled="locationLoading || loading">
+              {{ locationLoading ? 'Locating...' : 'Use my location' }}
+            </button>
+            <p class="status-text">{{ statusText }}</p>
+          </div>
+        </div>
+
+        <div class="feature-strip">
+          <article class="feature-card">
+            <span class="feature-kicker">History</span>
+            <p>Wikipedia-backed city summary with featured imagery.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-kicker">Events</span>
+            <p>Ticketmaster event feed shown in a cleaner card layout.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-kicker">Assistant</span>
+            <p>Ask follow-up questions from the same page.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="content-panel">
+        <div v-if="errorMessage" class="alert-card">
+          {{ errorMessage }}
+        </div>
+
+        <div v-if="!selectedCity && !loading" class="empty-state glass-card">
+          <p class="empty-kicker">No city loaded</p>
+          <h2>Start with a place you want to explore.</h2>
+          <p>Try a capital city, your hometown, or use your current location.</p>
+        </div>
+
+        <template v-if="selectedCity">
+          <section class="glass-card overview-card">
+            <div class="overview-header">
+              <div>
+                <p class="section-kicker">Current city</p>
+                <h2>{{ selectedCity }}</h2>
+              </div>
+              <span class="loading-pill" v-if="loading">Refreshing data...</span>
+            </div>
+
+            <p class="history-text">{{ history }}</p>
+
+            <div class="image-grid">
+              <figure class="image-frame">
+                <img :src="images[0]" :alt="selectedCity + ' image 1'" />
+              </figure>
+              <figure class="image-frame">
+                <img :src="images[1]" :alt="selectedCity + ' image 2'" />
+              </figure>
+            </div>
+          </section>
+
+          <section class="content-grid">
+            <article class="glass-card map-card">
+              <div class="section-heading">
+                <p class="section-kicker">Map</p>
+                <h3>Where it is</h3>
+              </div>
+              <iframe
+                class="map-frame"
+                :src="mapUrl"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                allowfullscreen
+              ></iframe>
+            </article>
+
+            <article class="glass-card events-card">
+              <div class="section-heading">
+                <p class="section-kicker">Upcoming events</p>
+                <h3>What is happening</h3>
+              </div>
+
+              <p v-if="eventsLoading" class="muted-text">Loading events...</p>
+              <p v-else-if="eventsError" class="muted-text">{{ eventsError }}</p>
+              <p v-else-if="!events.length" class="muted-text">No upcoming events found for this city.</p>
+
+              <div v-else class="events-list">
+                <article class="event-card" v-for="event in events" :key="event.url">
+                  <img v-if="event.image" class="event-image" :src="event.image" :alt="event.title" />
+                  <div class="event-body">
+                    <h4>{{ event.title }}</h4>
+                    <p class="event-meta">{{ event.date }}</p>
+                    <p class="event-meta">{{ event.venue }}</p>
+                    <p class="event-description">{{ event.description }}</p>
+                    <a class="event-link" :href="event.url" target="_blank" rel="noreferrer">Open event</a>
+                  </div>
+                </article>
+              </div>
+            </article>
+          </section>
+
+          <section class="glass-card chat-card">
+            <div class="section-heading">
+              <p class="section-kicker">Assistant</p>
+              <h3>Ask about {{ selectedCity }}</h3>
+            </div>
+
+            <div class="chat-log">
+              <div class="chat-message bot" v-if="!chatMessages.length">
+                Ask a question like "What is this city famous for?"
+              </div>
+              <div
+                v-for="(message, index) in chatMessages"
+                :key="index"
+                class="chat-message"
+                :class="message.role"
+              >
+                {{ message.text }}
+              </div>
+              <div v-if="chatLoading" class="chat-message bot">Assistant is thinking...</div>
+            </div>
+
+            <div class="chat-input-row">
+              <input
+                v-model.trim="chatInput"
+                class="chat-input"
+                type="text"
+                placeholder="Ask a follow-up question..."
+                @keyup.enter="askChatbot"
+              />
+              <button class="primary-btn" @click="askChatbot" :disabled="chatLoading || !chatInput">
+                Send
+              </button>
+            </div>
+          </section>
+        </template>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
